@@ -8,6 +8,8 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+import edu.fiu.reu2017.TrainingArray;
+
 /*
  * 	DO NOT FORGET TO INCLUDE MYSQL DRIVER!!!
  * 	LINK FOR JAR FILE DOWNLOAD:
@@ -50,26 +52,93 @@ public class BuildLookupTable
 	/*
 	 	Data to be modified
 	 */
-	private final static String TRAININGDATA = "FingerPrint";
-	private final static String PLAINLUT = "REUPlainLUT";
-	private final static String SECRETLUT = "REUEncryptedLUT";
+	//private final static String TRAININGDATA = "FingerPrint";
+	private final static String TRAININGDATA = "UniversityTowers";
+	private final static String PLAINLUT = "Test";
+	private final static String SECRETLUT = "TestTwo";
 	
 	public BuildLookupTable(PublicKey in)
 	{
 		pk = in;
 		NULL = Paillier.encrypt(new BigInteger("-120"), pk);
 	}
+
 	/*
-	 * 	Do a SQL Statement to find what are the 10 most prominent MAC Addresses...
-	 	SQL:
-	SELECT MACADDRESS, Count(MACADDRESS) as count 
-	from FIU.FingerPrint
-	group by MACADDRESS
-	ORDER BY count DESC
-	LIMIT 10;
+		Process training Data and send it to a Table to be processed later into 
+		a LookUp Table
 	 */
+	public void submitTrainingData(TrainingArray input)
+	{
+		try
+		{
+			Class.forName(myDriver);
+			Connection conn = DriverManager.getConnection(myUrl, username, password);
+			/*
+			Columns to be inserted...
+			XCoordinate, YCoordinate, MACAddress, RSS, EncryptedRSSSquared (implicitly learned)
+			
+			Please Note: I already created this table in MySQL, but I needed
+			 */
+			
+			//The Insert Statement for Plain Text
+			String SQL = "insert into " + TRAININGDATA + " values (?, ?, ?, ?, ?)";
+			System.out.println(SQL);
+			
+			PreparedStatement insert;
+			
+			
+			Double [] X = input.getX();
+			Double [] Y = input.getY();
+			String [] MAC = input.getMACAddress();
+			Integer [] RSS  = input.getRSS();
+			
+			BigInteger EncRSS;
+			for (int i = 0; i < X.length; i++)
+			{
+				insert = conn.prepareStatement(SQL);
+				//Fill up the row
+				insert.setDouble(1, X[i]);
+				insert.setDouble(2, Y[i]);
+				insert.setString(3, MAC[i]);
+				insert.setInt(4, RSS[i]);
+				System.out.println("X: "+X[i] + " Y:" + Y[i] + " MAC: " + MAC[i] + " RSS: "+RSS[i]);
+				EncRSS = new BigInteger(String.valueOf(RSS[i]));
+				
+				EncRSS = Paillier.encrypt(EncRSS, pk);
+				insert.setString(5, EncRSS.toString());
+				
+				System.out.println("Training SQL Insert Statement: ");
+				System.out.println(insert.toString());
+				
+				//Execute and Close SQL Command
+				insert.execute();
+				insert.close();
+			}
+			
+			//DO NOT FORGET TO COMMIT!!
+			conn.prepareCall("commit;").execute();
+		}
+		catch(SQLException se)
+		{
+			System.err.println("SQL EXCEPTION SPOTTED!!!");
+			se.printStackTrace();
+		}
+		catch(ClassNotFoundException cnf)
+		{
+			cnf.printStackTrace();
+		}
+	}
+	
 	public void getCommonMAC(String Query)
 	{
+		/*
+		Do a SQL Statement to find what are the 10 most prominent MAC Addresses:
+		SELECT MACADDRESS, Count(MACADDRESS) as count 
+		from FIU.FingerPrint
+		group by MACADDRESS
+		ORDER BY count DESC
+		LIMIT 10;
+		 */
 		try
 		{
 			Class.forName(myDriver);
@@ -295,6 +364,11 @@ public class BuildLookupTable
 					{
 						Einsert[x][currentCol] = NULL.toString();
 					}
+					
+					/*
+					Check to make whole
+					 */
+					
 					//This is crucial to "Refresh" the data
 					Plainst.close();
 					EncSt.close();
@@ -357,17 +431,28 @@ public class BuildLookupTable
 			PreparedStatement preparedStmtOne;
 			PreparedStatement preparedStmtTwo; 
 			
+			int PrimaryKey = 1;
 			//Create the Insert Statement
-			for (int i = 0; i < Xmap.size(); i++)
-			{
+			ArrayList<Integer> BADIndex = new ArrayList<Integer>();
+			
+			int i = 0;
+			for (;i < Xmap.size(); i++)
+			{	
+				if(isNullTuple(Pinsert[i]))
+				{
+					System.out.println("NULL ROW SPOTTED AT " + i +"!! SKIP!!");
+					BADIndex.add(i);
+					continue;
+				}
+				System.out.println("The good value of i: " + i);
 				preparedStmtOne = conn.prepareStatement(PlainQuery);
 				preparedStmtTwo = conn.prepareStatement(EncryptQuery);
 				//Fill up the PlainText Table Part 1
-				preparedStmtOne.setInt (1, (i + 1));//Oh...(1, 1)
+				preparedStmtOne.setInt (1, PrimaryKey);
 				preparedStmtOne.setDouble(2, Xmap.get(i));
 				preparedStmtOne.setDouble(3, Ymap.get(i));
 				
-				preparedStmtTwo.setInt (1, (i + 1));//Oh...(1, 1)
+				preparedStmtTwo.setInt (1, PrimaryKey);
 				preparedStmtTwo.setDouble(2, Xmap.get(i));
 				preparedStmtTwo.setDouble(3, Ymap.get(i));
 				
@@ -420,19 +505,34 @@ public class BuildLookupTable
 							break;
 					}
 				}
-				System.out.println(preparedStmtOne.toString());
-				System.out.println(preparedStmtTwo.toString());
+				//See Fulle Tuple
+				//System.out.println(preparedStmtOne.toString());
+				//System.out.println(preparedStmtTwo.toString());
+				
+				//Once Full Tuple is set, Execute!
 				preparedStmtOne.execute();
 				preparedStmtTwo.execute();
 				
 				//Close statements, so I can reuse it again!
 				preparedStmtOne.close();
 				preparedStmtTwo.close();
+				++PrimaryKey;
 			}
 			//DONT FORGET TO COMMIT!!!
 			Statement commit = conn.createStatement();
 			commit.executeQuery("commit;");
 			conn.close();
+			for (int j = 0; j < BADIndex.size(); j++)
+			{
+				System.out.print(BADIndex.get(j)+ " ");
+			}
+			/*
+			 * Confirm no "Null Rows exist with this SQL statement: 
+			 Select *
+			 from Test Where ONE = -120 AND TWO = -120 AND THREE = -120 AND
+			 FOUR = -120 AND FIVE = -120 AND SIX = -120 AND SEVEN = -120 AND
+			 EIGHT = -120 AND NINE = -120 AND TEN = -120 ;
+			 */
 		}
 		catch(SQLException se)
 		{
@@ -442,6 +542,26 @@ public class BuildLookupTable
 		catch(ClassNotFoundException cnf)
 		{
 			cnf.printStackTrace();
+		}
+	}
+	
+	private boolean isNullTuple(int [] row)
+	{
+		int counter = 0;
+		for (int i = 0; i < row.length; i++)
+		{
+			if (row[i]==-120)
+			{
+				++counter;
+			}
+		}
+		if (counter == 10)
+		{
+			return true;
+		}
+		else
+		{
+			return false;
 		}
 	}
 	
@@ -554,12 +674,12 @@ public class BuildLookupTable
 		{
 			System.out.println("X: " + Xmap.get(i) + " Y: " + Ymap.get(i));
 		}
-		/*
-		 * Build the Tables: (It was already made)
-		 */
-		build.createTables();
-		build.GetDataforLUT();
-		build.UpdateTables();
+		
+		//Build the Tables: (It was already made)
+		 
+		//build.createTables();
+		//build.GetDataforLUT();
+		//build.UpdateTables();
 		
 		//Print the LookupTables to a CSV File
 		//build.createCSVFiles();

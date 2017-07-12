@@ -1,11 +1,10 @@
-import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.Scanner;
+
+import edu.fiu.reu2017.SecureTriple;
+import edu.fiu.reu2017.TrainingArray;
+import edu.fiu.reu2017.UnsecureTriple;
 
 
 
@@ -17,14 +16,13 @@ public class LocalizationThread implements Runnable
 	
 	private boolean secure;
 	Double[] location;
-	EuclideanComputation comp;
 	/*
 	 * 	REU Variables
 	 */
 	PublicKey pk = new PublicKey();//Public Key
     SecureTriple transmission; //For Encrypted Paillier Transmission
-    ArrayList<String> MACAddress; //For unencrypted transmission Part 1
-    ArrayList<Integer> RSS;//For unencrpypted transmission Part 2
+    UnsecureTriple unsafeTransmission;
+    TrainingArray trainDatabase;
 
     /*
      *  Time
@@ -33,6 +31,12 @@ public class LocalizationThread implements Runnable
     
     protected Socket incomingClient = null;
     protected String serverText   = null;
+    
+    //Possible Computations
+	DistancePlain PlaintextLocalization;
+	DistanceDGK DGKLocalization;
+	DistancePaillier PallierLocalization;
+	
 
     public LocalizationThread(Socket clientSocket, String serverText)
     {
@@ -40,7 +44,8 @@ public class LocalizationThread implements Runnable
         this.serverText   = serverText;
     }
 
-    public void run()
+    @SuppressWarnings("unchecked")
+	public void run()
     {
 		try
 		{
@@ -51,41 +56,64 @@ public class LocalizationThread implements Runnable
 		    long startTime = System.nanoTime();
 			System.out.println("Localization Thread started running");
 			ObjectInputStream fromClient= new ObjectInputStream(incomingClient.getInputStream());
-
+			System.out.println("Object Input Stream Intialized!");
 			//	Get the Paillier Key
 			//	try
 			//	{
 			//		pk = (Paillier.PublicKey)fromClient.readObject();
 			//	}
 			//	catch(ClassNotFoundException cnf)
-			//				{
+			//	{
 			//	System.out.println("FAILURE GETTING PAILLIER KEY");
 			//	cnf.printStackTrace();
-			//}
+			//	}
 
-			//If I dont have a MAC Address I probably have secure transmission!
-			//Is it encrypted/unencrypted
-			try
+			Object x = fromClient.readObject();
+			System.out.println("Object Read...");
+			
+			if (x instanceof SecureTriple)
 			{
-				MACAddress = (ArrayList<String>)fromClient.readObject();
-				RSS = (ArrayList<Integer>)fromClient.readObject();
+				transmission = (SecureTriple)x;
+				System.out.println("SECURE DATA RECEIVED");
+				secure = true;
+			}
+			else if(x instanceof UnsecureTriple)
+			{
+				unsafeTransmission = (UnsecureTriple) x;
 				System.out.println("UNSECURE DATA RECEIVED");
 				secure=false;
 			}
-			catch(ClassNotFoundException cnf)
+			else if(x instanceof TrainingArray)
 			{
-				//If I fail here, then I have big trouble!
-				try 
-				{
-					transmission = (SecureTriple) fromClient.readObject();
-					System.out.println("SECURE DATA RECEIVED");
-					secure = true;					
-				}
-				catch (ClassNotFoundException cnfTwo)
-				{
-					cnfTwo.printStackTrace();
-				}
+				trainDatabase = (TrainingArray) x;
+				System.out.println("TRAINING DATA RECEIVED");
+				System.out.println("DATA BEING FORWARDED TO DATABASE...");
+				//Paillier Public Key already predefined...
+				BuildLookupTable train = new BuildLookupTable(new PublicKey());
+
+				train.submitTrainingData(trainDatabase);
+
+				System.out.println("Training Completed");
+				boolean trainingSuccessful = true;
+				ObjectOutputStream responseToClient = new ObjectOutputStream(incomingClient.getOutputStream());
+				responseToClient.writeObject(trainingSuccessful);
+				this.closeClientConnection();//Close Connection of Socket
+				long estimatedTime = System.nanoTime() - startTime;
+
+				System.out.println(counter + ": Training completed from Client at: " 
+						+ incomingClient.getInetAddress() 
+						+ " and it took " + (double)(estimatedTime/Billion) + " seconds");
+				++counter;
+
+				fromClient.close();
+				responseToClient.close();
+				return;//I hope this kills the thread
 			}
+			else
+			{
+				throw new IllegalArgumentException("INVALID OBJECT!");
+			}
+			
 			/*
 				 	After getting the data, send it to the Euclidean Computation Class
 				  	Do Required Computations...see Euclidean Computation Class
@@ -93,15 +121,14 @@ public class LocalizationThread implements Runnable
 
 			if (secure==true)
 			{
-				comp = new EuclideanComputation(transmission, pk);
+				PallierLocalization = new DistancePaillier(transmission, pk);
+				location = PallierLocalization.findCoordinate();
 			}
 			else
 			{
-				comp = new EuclideanComputation(MACAddress,RSS);
+				PlaintextLocalization = new DistancePlain(unsafeTransmission.getMAC(),unsafeTransmission.getRSS());
+				location = PlaintextLocalization.findCoordinate();
 			}
-			location = comp.findCoordinate();
-
-			//compute = compute*=2;
 
 			/*
 			 * 	Return Data to Client
@@ -116,16 +143,27 @@ public class LocalizationThread implements Runnable
 			long estimatedTime = System.nanoTime() - startTime;
 			
 			System.out.println(counter + ": Computation completed from Client at: " + incomingClient.getInetAddress() 
-			+ " and it took " + (estimatedTime/Billion) + "seconds");
+			+ " and it took " + estimatedTime + " nano-seconds");
 			++counter;
+			
+			//Close I/O streams
+			fromClient.close();
+			responseToClient.close();
+			//Close Socket
+			this.closeClientConnection();
+			return;
 		}
 		catch(IOException IOE)
 		{
 			IOE.printStackTrace();
 		}
+		catch (ClassNotFoundException e)
+		{
+			e.printStackTrace();
+		}
     }
     
-	public void closeClientConnection()
+	private void closeClientConnection()
 	{
 		if (incomingClient!=null)
 		{
@@ -141,5 +179,5 @@ public class LocalizationThread implements Runnable
 				}
             }
 		}
-}
+	}
 }

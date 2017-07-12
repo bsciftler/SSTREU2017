@@ -21,9 +21,12 @@ public class SQLRead
 	String Query;
 	boolean isSecure;
 	private final static int VECTORSIZE = 10;
-	ArrayList<BigInteger []> S1Array;
-	ArrayList<Integer []> RSSArray;
+	ArrayList<BigInteger []> S1Array = new ArrayList<BigInteger []>();
+	ArrayList<Integer []> RSSArray = new ArrayList<Integer []>();
 	HashMap<Integer, Double []> PKandLocationSet = new HashMap<Integer, Double[]>();
+	
+	private final static String PLAINLUT = "REUPlainLUT";
+	private final static String SECRETLUT = "REUEncryptedLUT";
 	
 	public SQLRead(String Q, Boolean isSec)
 	{
@@ -39,6 +42,7 @@ public class SQLRead
 	{
 		try
 		{
+			Class.forName(myDriver);
 			Connection conn = DriverManager.getConnection(myUrl, username, password);
 
 			// our SQL SELECT query. 
@@ -51,13 +55,13 @@ public class SQLRead
 			
 			//int index;
 			
-			if (isSecure==true)
+			if (isSecure==false)
 			{
 				while(rs.next())
 				{
 					Integer [] RSS = new Integer [VECTORSIZE];
 					Double [] Location = new Double [2];
-					Location[0] = rs.getDouble("Xcoordiante");
+					Location[0] = rs.getDouble("Xcoordinate");
 					Location[1] = rs.getDouble("Ycoordinate");
 					PKandLocationSet.put(rs.getInt("ID"), Location);
 					RSS[0] = rs.getInt("ONE");
@@ -79,7 +83,7 @@ public class SQLRead
 				{
 					BigInteger [] S1 = new BigInteger [VECTORSIZE];
 					Double [] Location = new Double [2];
-					Location[0] = rs.getDouble("Xcoordiante");
+					Location[0] = rs.getDouble("Xcoordinate");
 					Location[1] = rs.getDouble("Ycoordinate");
 					PKandLocationSet.put(rs.getInt("ID"), Location);
 					S1[0] = new BigInteger(rs.getString("ONE"));
@@ -94,9 +98,11 @@ public class SQLRead
 					S1[9] = new BigInteger(rs.getString("TEN"));
 					S1Array.add(S1);
 				}
+				
+				st.close();
 				//I also need plain text to compute S2
 				Statement partTwo = conn.createStatement();
-				ResultSet S2 = partTwo.executeQuery("select * from reuplainlut;");
+				ResultSet S2 = partTwo.executeQuery("select * from " + PLAINLUT + ";");
 				while(S2.next())
 				{
 					Integer [] RSS = new Integer [VECTORSIZE];
@@ -112,12 +118,18 @@ public class SQLRead
 					RSS[9] = rs.getInt("TEN");
 					RSSArray.add(RSS);
 				}
+				S2.close();
 			}
 		}
 		catch(SQLException se)
 		{
 			System.err.println("SQL EXCEPTION SPOTTED!!!");
 			se.printStackTrace();
+		}
+		catch (ClassNotFoundException e)
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 	}
 	
