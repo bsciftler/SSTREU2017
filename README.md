@@ -8,7 +8,8 @@ THE FOLLOWING CLASSES IN REU SERVER
 - SecureTriple  
 - UnsecutreTriple  
 - TrainingArray  
-must be stored within a package called edu.fiu.reu2017.  
+
+Must be stored within a package called edu.fiu.reu2017.  
 This solves the Class Not Found exception when the Android app sends those classes through the socket.  
 
 Also this program requires the MySQL Driver found here: https://dev.mysql.com/downloads/connector/j/ so the localhost can communicate with the SQL Server.
