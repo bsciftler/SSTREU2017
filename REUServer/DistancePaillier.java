@@ -1,18 +1,23 @@
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.HashMap;
 
-import edu.fiu.reu2017.SecureTriple;
+import edu.fiu.reu2017.SendSecureTriple;
 
 
 public class DistancePaillier extends Distance
 {
+	//Secure localization: Data from SQLServer: LookupTable
+	protected ArrayList<BigInteger []> S1Array;
+	
+	
 	//Secure localization: Data from Phone
-	BigInteger [] S2;
-	BigInteger [] S3;
+	private BigInteger [] S2;
+	private	BigInteger [] S3;
 	
 	//Paillier Keys
-	PublicKey pk;
-	PrivateKey sk = new PrivateKey(1024);
+	private PublicKey pk;
+	private PrivateKey sk = new PrivateKey(1024);
 	
 	//Store the computed distances...
 	BigInteger [] encryptedDistance;
@@ -20,7 +25,7 @@ public class DistancePaillier extends Distance
 	//Maps DGK/Paillier Values to Primary Key
 	protected HashMap<BigInteger, Integer> EncDistanceKey = new HashMap<BigInteger, Integer>();
 	
-	public DistancePaillier(SecureTriple input, PublicKey n)
+	public DistancePaillier(SendSecureTriple input, PublicKey n)
 	{
 		pk = n;
 		//Each index will have:
@@ -60,6 +65,10 @@ public class DistancePaillier extends Distance
 						temp = Paillier.multiply(S2[j], SQLData.get(i)[j], pk);//S2 = -2v'*v
 						temp = Paillier.add(temp, S1Array.get(i)[j], pk);//S1 +  S2
 						temp = Paillier.add(temp, S3[j], pk);//Add the S3
+						if (temp.equals(BigInteger.ZERO))
+						{
+							System.out.println("What happens if I localize right on a training spot?");
+						}
 					}
 					//Keep adding more the other values
 					temp = Paillier.add(temp, Paillier.multiply(S2[j], SQLData.get(i)[j], pk), pk);

@@ -2,9 +2,9 @@ import java.io.*;
 import java.net.Socket;
 import java.util.Scanner;
 
-import edu.fiu.reu2017.SecureTriple;
-import edu.fiu.reu2017.TrainingArray;
-import edu.fiu.reu2017.UnsecureTriple;
+import edu.fiu.reu2017.SendPlainData;
+import edu.fiu.reu2017.SendSecureTriple;
+import edu.fiu.reu2017.SendTrainingArray;
 
 
 
@@ -13,16 +13,19 @@ public class LocalizationThread implements Runnable
 	int compute;
 	Scanner input;
 	int counter = 1;
+	private boolean isSecure;
 	
-	private boolean secure;
 	Double[] location;
 	/*
 	 * 	REU Variables
 	 */
-	PublicKey pk = new PublicKey();//Public Key
-    SecureTriple transmission; //For Encrypted Paillier Transmission
-    UnsecureTriple unsafeTransmission;
-    TrainingArray trainDatabase;
+	PublicKey pk = new PublicKey();//Paillier Public Key (Pre-defined on Server)
+	//Only for Testing purposes!
+	PrivateKey sk = new PrivateKey(1024);//Paillier Pivate Key (Pre-defined on Server)
+	
+    SendSecureTriple transmission; //For Encrypted DGK/Paillier Transmission
+    SendPlainData unsafeTransmission; //For PlainText Transmission
+    SendTrainingArray trainDatabase; //For Training  Data
 
     /*
      *  Time
@@ -71,21 +74,21 @@ public class LocalizationThread implements Runnable
 			Object x = fromClient.readObject();
 			System.out.println("Object Read...");
 			
-			if (x instanceof SecureTriple)
+			if (x instanceof SendSecureTriple)
 			{
-				transmission = (SecureTriple)x;
+				transmission = (SendSecureTriple)x;
 				System.out.println("SECURE DATA RECEIVED");
-				secure = true;
+				isSecure=true;
 			}
-			else if(x instanceof UnsecureTriple)
+			else if(x instanceof SendPlainData)
 			{
-				unsafeTransmission = (UnsecureTriple) x;
+				unsafeTransmission = (SendPlainData) x;
 				System.out.println("UNSECURE DATA RECEIVED");
-				secure=false;
+				isSecure=false;
 			}
-			else if(x instanceof TrainingArray)
+			else if(x instanceof SendTrainingArray)
 			{
-				trainDatabase = (TrainingArray) x;
+				trainDatabase = (SendTrainingArray) x;
 				System.out.println("TRAINING DATA RECEIVED");
 				System.out.println("DATA BEING FORWARDED TO DATABASE...");
 				//Paillier Public Key already predefined...
@@ -97,18 +100,21 @@ public class LocalizationThread implements Runnable
 				boolean trainingSuccessful = true;
 				ObjectOutputStream responseToClient = new ObjectOutputStream(incomingClient.getOutputStream());
 				responseToClient.writeObject(trainingSuccessful);
-				this.closeClientConnection();//Close Connection of Socket
+				
+				
+				
 				long estimatedTime = System.nanoTime() - startTime;
 
 				System.out.println(counter + ": Training completed from Client at: " 
 						+ incomingClient.getInetAddress() 
-						+ " and it took " + (double)(estimatedTime/Billion) + " seconds");
+						+ " and it took " + estimatedTime + " nano-seconds");
 				++counter;
 
 				fromClient.close();
 				responseToClient.close();
 				return;//I hope this kills the thread
 			}
+			
 			else
 			{
 				throw new IllegalArgumentException("INVALID OBJECT!");
@@ -119,10 +125,18 @@ public class LocalizationThread implements Runnable
 				  	Do Required Computations...see Euclidean Computation Class
 			 */
 
-			if (secure==true)
+			if (isSecure==true)
 			{
-				PallierLocalization = new DistancePaillier(transmission, pk);
-				location = PallierLocalization.findCoordinate();
+				if (transmission.isPaillier==true)
+				{
+					PallierLocalization = new DistancePaillier(transmission, pk);
+					location = PallierLocalization.findCoordinate();
+				}
+				else
+				{
+					DGKLocalization = new DistanceDGK(transmission);
+					location = DGKLocalization.findCoordinate();
+				}
 			}
 			else
 			{
