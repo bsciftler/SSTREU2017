@@ -5,11 +5,12 @@
 
 IMPORTANT NOTICE:  
 THE FOLLOWING CLASSES IN REU SERVER  
-- SecureTriple  
-- UnsecutreTriple  
-- TrainingArray  
-
+- SendPlainData  
+- SendSecureTriple  
+- SendTrainingArray
+- DGKPublicKey 
+- DGKPrivateKey (WAS ONLY USED FOR TESTING PURPOSES)
 Must be stored within a package called edu.fiu.reu2017.  
-This solves the Class Not Found exception when the Android app sends those classes through the socket.  
+This solves the Class Not Found exception when the Android app sends those classes through the socket.  Please see the screenshot "CorrectSetUp.jpg" to see how it is done.
 
 Also this program requires the MySQL Driver found here: https://dev.mysql.com/downloads/connector/j/ so the localhost can communicate with the SQL Server.
