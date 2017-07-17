@@ -41,6 +41,17 @@ public class SendSecureTriple implements Serializable
         sk = null;
         pk = null;
     }
+    
+    public SendSecureTriple(ArrayList<String> first, BigInteger [] second, BigInteger [] third,
+    		boolean isPail, DGKPublicKey p)
+    {
+    	MACAddress = first;
+    	S2 = second;
+    	S3 = third;
+    	isPaillier = isPail;
+    	pk = p;
+    	sk = null;
+    }
 
     private void readObject(ObjectInputStream aInputStream) throws ClassNotFoundException, IOException
     {

@@ -1,58 +1,48 @@
-import java.io.BufferedReader;
+import edu.fiu.reu2017.DGKPrivateKey;
+import edu.fiu.reu2017.DGKPublicKey;
+
 import java.io.BufferedWriter;
-import java.io.FileInputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Random;
+import java.util.Scanner;
 
-//Conversion from NLT to BigInteger was done using this site
-//http://www.shoup.net/ntl/doc/ZZ.txt
 /*
- * 	Most likely errors I made
- * 	- Random Number Generation:
- * I am not sure the difference between randombnd and random_zz
- * Also I don't understand how random number generation works with big integers.
- * (See bottom)
- * 	- I have omitted some methods
- * 	- Potentially did Hashmapping wrong
- * 	- The IsSuperiorMethod is difficult to understand, so i probably made mistakes there
- * 
- * 	See the very bottom of the code to find the NLT methods translated to Java
- */
+Methods converted from C++ NTL Library using this site as my guide
+http://www.shoup.net/ntl/doc/ZZ.txt
+See the very bottom of the code to find the NLT methods translated to Java
+DGK Code was translated from C++ thanks to:
+https://github.com/Bvinhmau/DGK-outsourced
+
+Credits to Andrew for code conversion and Samet for helping on revising the code/debugging it.
+
+Feel free to use this code as you like.
+*/
 public class DGKOperations
 {
+	private static int l=16, t=160, k=1024;
 	private static DGKPublicKey pubKey;
 	private static DGKPrivateKey privkey;
 	private static Random rnd = new Random();
 	private static int certainty = 40;
 	//Probability of getting prime is 1-(1/2)^40
-	static long biggestPlaintext;
+	private static long biggestPlaintext;
+	public static int gammaA;
 	
-	public DGKOperations(int l, int t, int k)
+	public DGKOperations(int newl, int newt, int newk)
 	{
+		l = newl;
+		t = newt;
+		k = newk;
 		GenerateKeys(l,t,k);
 	}
-	
-	/*	This method will only be activated in the Server:
-	 * 	Goal: Compute the Euclidean distance between two vectors 
-	 * 	composed of RSS values.
-	 * 	x is a value from the server.
-	 * 	y is a value from the client (Android Phone).
-	 * 	(x - y)^2 = x^2 - 2xy + y^2
-	 * 	S_1 = x^2, square and encrypt
-	 * 	S_2 = -2xy, SOLVE BY: [-2y]^x
-	 * 	S_3 = y^2 (COMPLETED)
-	 * 	Then sum all terms to get first term in Eucliedan Distance.
-	 * 	Repeat it
-	 * 	x is in plaintext at the server.
-	 */
-	
+
 	public static void GenerateKeys(int l, int t, int k)
 	{
 		System.out.println("Generating Keys...");
@@ -176,7 +166,7 @@ public class DGKOperations
 	        
 	        h = r.modPow(tmp,n);
 	        
-	        if (h == BigInteger.ONE)
+	        if (h.equals(BigInteger.ONE))
 	        {
 	            continue;
 	        }
@@ -314,10 +304,52 @@ public class DGKOperations
 	    HashMap<BigInteger, Long> lut = new HashMap <BigInteger, Long>();
 	    
 	    BigInteger gvp = POSMOD(g,p).modPow(vp,p);
+	    
+	    /*
+	    I am printing Lookup Tables so it can easily be imported into 
+	    the Android Phone,
+	    DO NOT USE DGKGENERATON ON ANDROID PHONE, IT TAKES TOO LONG!
+	     */
+	    String LUTlocation = "C:\\Users\\Andrew\\Desktop\\LUT.txt";
+	    String hLUTlocation = "C:\\Users\\Andrew\\Desktop\\hLUT.txt";
+    	String gLUTlocation = "C:\\Users\\Andrew\\Desktop\\gLUT.txt";
+    	String KeyLocation= "C:\\Users\\Andrew\\Desktop\\DGKKeys.txt";
+		PrintWriter keys = null;
+		PrintWriter pwOne = null;
+		PrintWriter pwTwo = null;
+		PrintWriter pwThree = null;
+    	
+	    try
+	    {
+	    	keys = new PrintWriter(
+					 new BufferedWriter(
+					 new OutputStreamWriter(
+					 new FileOutputStream(KeyLocation))));
+	    	
+	    	pwOne = new PrintWriter(
+					 new BufferedWriter(
+					 new OutputStreamWriter(
+					 new FileOutputStream(LUTlocation))));
+        	pwTwo = new PrintWriter(
+        			new BufferedWriter(
+        					new OutputStreamWriter(
+        							new FileOutputStream(hLUTlocation))));
+        	pwThree = new PrintWriter(
+        			new BufferedWriter(
+        					new OutputStreamWriter(
+        							new FileOutputStream(gLUTlocation))));
+	    }
+	    catch(IOException ioe)
+	    {
+	    	System.out.println("FAILURE AT GENERATING PRINT WRITER FOR DGK KEY GENERATION/LOOKUP TABLES");
+	    	ioe.printStackTrace();
+	    }
 	    for (int i=0; i<u; ++i)
 	    {
+	    	
 	        BigInteger decipher = gvp.modPow(POSMOD(BigInteger.valueOf((long) i),p),p);
 	        //lut[decipher] = i;
+	        pwOne.println(decipher + "," + i);
 	        lut.put(decipher,(long)i);
 	    }
 
@@ -327,50 +359,41 @@ public class DGKOperations
 	        BigInteger e = new BigInteger("2").modPow(BigInteger.valueOf((long)(i)),n);
 	        BigInteger out = h.modPow(e,n);
 	        //hLUT[i] = out;
+	        pwTwo.println(i + "," + out);	   
 	        hLUT.put((long)i,out);
 	    }
 	    
-	    HashMap<Long, BigInteger> gLUT = new HashMap<Long, BigInteger>((int)u);
+	    HashMap<Long, BigInteger> gLUT = new HashMap<Long, BigInteger>();
 	    for (int i=0; i<u; ++i)
 	    {
 	        BigInteger out = g.modPow(BigInteger.valueOf((long)i),n);
 	        //gLUT[i] = out;
+	        pwThree.println((i + "," + out));
 	        gLUT.put((long)i,out);
 	    }
+	    pwOne.flush();
+	    pwTwo.flush();
+	    pwThree.flush();
+	    pwOne.close();
+	    pwTwo.close();
+	    pwThree.close();
 	    pubKey =  new DGKPublicKey(n,g,h, u, gLUT,hLUT,l,t,k);
    	    privkey = new DGKPrivateKey(p,q,vp,vq,lut,u);
-	    System.out.println("Printing values!!");
-
-	    try
-	    {
-	    	String filelocation= "C:\\Users\\Andrew\\Desktop\\DGKKeys.txt";
-		
-			PrintWriter pw = new PrintWriter(
-							 new BufferedWriter(
-							 new OutputStreamWriter(
-							 new FileOutputStream(filelocation))));
-			pw.println("Public Key");
-			pw.println("N: " + n);
-			pw.println("G: " + g);
-			pw.println("H: " + h);
-			pw.println("U: " + u);
-			pw.println("Private Key");
-			pw.println("p: "+ p);
-			pw.println("q: "+ q);
-			pw.println("vp: " + vp);
-			pw.println("vq: " + vq);
-			pw.println("U: " + u);
-			pw.flush();
-			pw.close();
-	    }
-	    catch (IOException ioe)
-	    {
-	    	System.out.println("Failure at printing values");
-	    }
-	    catch (NullPointerException nfe)
-	    {
-	    	System.out.println("Got NFE here...");
-	    }
+	    System.out.println("Printing DGK values!!");
+	        
+		keys.println("Public Key");
+		keys.println("N: " + n);
+		keys.println("G: " + g);
+		keys.println("H: " + h);
+		keys.println("U: " + u);	
+		keys.println("Private Key");	
+		keys.println("p: "+ p);
+		keys.println("q: "+ q);
+		keys.println("vp: " + vp);
+		keys.println("vq: " + vq);
+		keys.println("U: " + u);
+		keys.flush();
+		keys.close();
 	    System.out.println("FINISHED WITH DGK KEY GENERATION!");
 	}//End of Generate Key Method
 	
@@ -475,7 +498,12 @@ long bit(long a, long k);
 	    //Assume a*b(mod n)
 	    return result;
 	}
-
+	
+	public static BigInteger DGKSubtract(DGKPublicKey pubKey, BigInteger a, BigInteger b)
+	{
+		BigInteger minusB = DGKMultiply(pubKey, b, -1);
+		return DGKOperations.DGKAdd(pubKey, a, minusB);
+	}
 	//cipher a * Plain text
 	public static BigInteger DGKMultiply(DGKPublicKey pubKey, BigInteger cipher, long plaintext)
 	{
@@ -485,7 +513,7 @@ long bit(long a, long k);
 	    {
 	    	 throw new IllegalArgumentException("DGKMultiply Invalid Parameter :  the ciphertext is not in Zn");
 	    }
-	    if (plaintext < 0 || u <= plaintext )
+	    if (plaintext <= -2 || u <= plaintext )
 	    {
 	    	 throw new IllegalArgumentException("DGKMultiply Invalid Parameter :  the plaintext is not in Zu");
 	    }
@@ -517,33 +545,37 @@ long bit(long a, long k);
 	{
 	    // A & B
 	    int l = pubKey.l - 2 ; // see constraints in the veugen paper
-	    int N = (int) pubKey.u;
-	    int u = (int) pubKey.u;
-	    int powL = 2;
+	    BigInteger N = pubKey.n;
+	    long u = pubKey.u;
+	    BigInteger powL = new BigInteger("2");//Was originally long...
+	    long longpowL = 2;
 
 	    // A
-	    long r = RandomBnd(N).longValue();//
+	    long r = RandomBnd(N.bitLength()).longValue();//
 
 	    //r = 5; //TODO remove this heresy
 	    BigInteger encR = encrypt(pubKey,r);
-	    long alpha = POSMOD(BigInteger.valueOf(r),BigInteger.valueOf(powL)).longValue();
+	    long alpha = POSMOD(BigInteger.valueOf(r),powL).longValue();
 	    BigInteger alphaZZ = BigInteger.valueOf(alpha);
 	    BigInteger z = 
 	    			DGKAdd(pubKey,
-	    			encrypt(pubKey,powL),
+	    			encrypt(pubKey,powL.longValue()),
 	    			DGKAdd(pubKey, encR,
 	    			DGKAdd(pubKey, x, DGKMultiply(pubKey,y,u-1))));
 	    // B
 	    long plainZ = decrypt(pubKey,privKey,z);
 
-	    long beta = POSMOD(BigInteger.valueOf(plainZ),BigInteger.valueOf((long)powL)).longValue();
+	    long beta = POSMOD(BigInteger.valueOf(plainZ), powL).longValue();
 	    BigInteger encBetaMayOverflow = 
 	    	encrypt
-	    	(pubKey,
-	    		(overflow(beta,(powL - POSMOD(N,powL))))
+	    	(
+	    		pubKey,
+	    		(
+	    			overflow(beta,(powL.subtract(POSMOD(N,powL)).longValue()))
+	    		)
 	    	);
 	    BigInteger d ;
-	    if ( plainZ < (N-1)/2)
+	    if ( plainZ < N.subtract(BigInteger.ONE).divide(new BigInteger("2")).longValue())
 	    {
 	        d = encrypt(pubKey,1);
 	    }
@@ -560,7 +592,7 @@ long bit(long a, long k);
 	        encBetaTab[i] = encrypt(pubKey, betaTab[i]);
 	    }
 	    //A
-	    if (r < (N-1)/2)
+	    if (r < N.subtract(BigInteger.ONE).divide(new BigInteger("2")).longValue())
 	    {
 	        d = encrypt(pubKey,0);
 	    }
@@ -569,7 +601,7 @@ long bit(long a, long k);
 	    BigInteger c [] = new BigInteger [l+1];
 
 
-	    long alphaHat = POSMOD(BigInteger.valueOf(r-N), BigInteger.valueOf(powL)).longValue();
+	    long alphaHat = POSMOD(BigInteger.valueOf(r).subtract(N), powL).longValue();
 	    BigInteger xorBitsSum = encrypt(pubKey,0);
 	    BigInteger alphaHatZZ = BigInteger.valueOf(alphaHat);
 	    for(int i = 0 ; i < l ; i++)
@@ -605,7 +637,7 @@ long bit(long a, long k);
 	        long alphaexp = POSMOD( bit(alphaHatZZ,l-1-i) -  bit(alphaZZ,l-1-i), u);
 	        c[l-1-i] =  DGKAdd(pubKey,
 	                           wProduct,
-	                           DGKAdd(pubKey, DGKAdd(pubKey,DGKMultiply(pubKey,encBetaTab[l-1-i],u-1),encrypt(pubKey, POSMOD(s + bit(alphaZZ, l-1-i), N) )), DGKMultiply(pubKey,d,alphaexp)));
+	                           DGKAdd(pubKey, DGKAdd(pubKey,DGKMultiply(pubKey,encBetaTab[l-1-i],u-1),encrypt(pubKey, POSMOD(BigInteger.valueOf(s + bit(alphaZZ, l-1-i)), N).longValue() )), DGKMultiply(pubKey,d,alphaexp)));
 
 	        BigInteger rBlind = RandomBits_ZZ(pubKey.t * 2);
 	        rBlind = rBlind.setBit(pubKey.t * 2 -1);
@@ -626,7 +658,7 @@ long bit(long a, long k);
 	            break;
 	        }
 	    }
-	    BigInteger divZ = encrypt(pubKey,plainZ/powL);
+	    BigInteger divZ = encrypt(pubKey,plainZ/powL.longValue());
 
 	    //A
 	    BigInteger betaInfAlpha;
@@ -639,9 +671,9 @@ long bit(long a, long k);
 	        betaInfAlpha = DGKAdd(pubKey,encrypt(pubKey,1),DGKMultiply(pubKey, db, u -1));
 	    }
 
-	    BigInteger overflow = DGKMultiply(pubKey,d,1+N/powL);
+	    BigInteger overflow = DGKMultiply(pubKey,d,N.divide(powL.add(BigInteger.ONE)).longValue());
 	    BigInteger doubleBucketGap ;
-	    if (beta >= powL - POSMOD(N,powL))
+	    if (beta >= longpowL - POSMOD(N,powL).longValue())
 	    {
 	        doubleBucketGap = encrypt(pubKey,0);
 	    }
@@ -650,25 +682,38 @@ long bit(long a, long k);
 	        doubleBucketGap = DGKMultiply(pubKey, d, u -1);
 	    }
 	    overflow = DGKAdd(pubKey,overflow,doubleBucketGap);
-	    BigInteger result =
-	    		DGKAdd(pubKey,
-	    		DGKAdd(pubKey,divZ,
-	    		DGKMultiply(pubKey,DGKAdd(pubKey, encrypt(pubKey,r/powL),betaInfAlpha), u-1))
-	             , overflow);
-	    long lastpush = decrypt(pubKey,privKey,d) *
-	    (
-	    	(1 -decrypt(pubKey,privKey,betaInfAlpha))*(1 - (overflowTwo(alpha,POSMOD(N,powL))))* (overflow(beta,(powL - POSMOD(N,powL))))
-	    	+(decrypt(pubKey,privKey,betaInfAlpha))*(0 - (overflowTwo(alpha,POSMOD(N,powL)))* (1-(overflow(beta,(powL - POSMOD(N,powL))))
-	    )));
-
-	    BigInteger effectOfAlphaBetaOverflow = CipherMultiplication(pubKey,privKey,betaInfAlpha,encBetaMayOverflow).get(0);
-	    effectOfAlphaBetaOverflow = DGKMultiply(pubKey,effectOfAlphaBetaOverflow, POSMOD(2 * (overflowTwo(alpha,POSMOD(N,powL))) - 1,N));
-	    effectOfAlphaBetaOverflow = DGKAdd(pubKey,effectOfAlphaBetaOverflow,DGKMultiply(pubKey,DGKAdd(pubKey, encBetaMayOverflow, betaInfAlpha),POSMOD(N-overflowTwo(alpha,POSMOD(N,powL)),N)));
-	    effectOfAlphaBetaOverflow = DGKAdd(pubKey, effectOfAlphaBetaOverflow,encBetaMayOverflow );
-	    effectOfAlphaBetaOverflow = CipherMultiplication(pubKey,privKey,effectOfAlphaBetaOverflow,d).get(0);	    // encBetaMayOverflow
-	    result = DGKAdd(pubKey,result,DGKMultiply(pubKey,effectOfAlphaBetaOverflow,u-1));
-
-	    return result;
+//	    BigInteger result =
+//	    		DGKAdd(pubKey,
+//	    		DGKAdd(pubKey,divZ,
+//	    		DGKMultiply(pubKey,DGKAdd(pubKey, encrypt(pubKey,r/longpowL),betaInfAlpha), u-1))
+//	             , overflow);
+//	    long lastpush = decrypt(pubKey,privKey,d) *
+//	    (
+//	    	(1 -decrypt(pubKey,privKey,betaInfAlpha))*(1 - (overflowTwo(alpha,POSMOD(N,powL).longValue())))* (overflow(beta,(longpowL - POSMOD(N,powL).longValue())))
+//	    	+(decrypt(pubKey,privKey,betaInfAlpha))*(0 - (overflowTwo(alpha,POSMOD(N,powL).longValue()))* (1-(overflow(beta,(longpowL - POSMOD(N,powL).longValue())))
+//	    )));
+//
+//	    BigInteger effectOfAlphaBetaOverflow = CipherMultiplication(pubKey,privKey,betaInfAlpha,encBetaMayOverflow).get(0);
+//	    //effectOfAlphaBetaOverflow = DGKMultiply(pubKey,effectOfAlphaBetaOverflow, 
+//	    		POSMOD(BigInteger.valueOf
+//	    				(
+//	    						2 * overflowTwo(alpha,POSMOD(N,powL).longValue())
+//	    				).subtract(BigInteger.ONE),N));
+//	    //effectOfAlphaBetaOverflow = DGKAdd(pubKey,effectOfAlphaBetaOverflow,DGKMultiply(pubKey,DGKAdd(pubKey, encBetaMayOverflow, betaInfAlpha),
+//	    		POSMOD(
+//	    				N.subtract
+//	    				(
+//	    				BigInteger.valueOf
+//	    					(
+//	    						overflowTwo(alpha,POSMOD(N,powL).longValue())
+//	    					)
+//	    				)
+//	    				,N)));
+//	    effectOfAlphaBetaOverflow = DGKAdd(pubKey, effectOfAlphaBetaOverflow,encBetaMayOverflow );
+//	    effectOfAlphaBetaOverflow = CipherMultiplication(pubKey,privKey,effectOfAlphaBetaOverflow,d).get(0);	    // encBetaMayOverflow
+//	    result = DGKAdd(pubKey,result,DGKMultiply(pubKey,effectOfAlphaBetaOverflow,u-1));
+return null;
+	    //return result;
 	}
 	
 	public static ArrayList<BigInteger> CipherMultiplication(DGKPublicKey pubKey,DGKPrivateKey privKey, BigInteger x, BigInteger y)
@@ -1000,29 +1045,412 @@ long RandomBits_long(long l);
 		return result;
 	}
 	
+	//Protocol 2:
+	public static void Pailliercompare(BigInteger Px, BigInteger Py, PublicKey pk)
+	{
+		//A(Server) chooses a random number r of l + 1 + sigma bits and computes z
+		int sigma = 80;//As Suggested by Paper
+		int l = 20;
+		BigInteger z = Paillier.subtract(Px, Py, pk);
+		BigInteger TwopowL = new BigInteger(String.valueOf(exponent(2,l)));
+		//Get a random balue of EXACTLY l + 1 + sigma bits
+		BigInteger r;
+		do 
+		{
+			r = new BigInteger(l+1+sigma, rnd);
+		}
+		while (r.bitLength() != l + 1 + sigma);
+		
+		z = Paillier.add(z, Paillier.encrypt(r.add(TwopowL), pk), pk);
+		
+		//Step 2: Send to B (Android Phone, and decrypt z...
+		//Compute z (mod 2^l)
+		
+		//Step 3:
+		BigInteger alpha = r.mod(TwopowL);
+	
+		//A and B (Server and Android Phone run the comparison protocol with Private input
+		//See Protocol 3...I will get gammaA and gamma B
+		//such that gammaA XOR gammaB = (alpha <= beta)
+		
+	}
+	
+	private static int exponent(int base, int exponent)
+	{
+		if (exponent == 1)
+		{
+			return base;
+		}
+		return base * exponent(base, exponent-1);
+	}
+	//Protocol 3: x and y are PRIVATE PLAIN TEXT INPUTS!
+	//Read Section 5.1 in Original 2007 DGK Paper
+	//Also follows code from Thijis paper
+	public static ArrayList<BigInteger> Protocol3(long x, ArrayList<BigInteger> y, DGKPublicKey pubKey)
+	{
+		BigInteger bigX = BigInteger.valueOf(x);
+		
+		int l = Math.max(bigX.bitLength(), y.size());
+		if (bigX.bitLength() != y.size())
+		{
+			//if x is bigger, append 0 to y
+			int xCounter = bigX.bitLength();
+			int yCounter = y.size();
+			String xBits = bigX.toString(2);
+			
+			while (xCounter != l)
+			{
+				xBits = "0" + xBits;
+				++xCounter;
+				
+				//Update value of X
+			}
+			//if y is bigger, append 0 to x
+			while(yCounter != l)
+			{
+				//Place more encrypted 0...
+				//Sy = "0" + Sy;
+				++yCounter;
+			}
+		}
+		String bigXbits = bigX.toString(2);
+		ArrayList<BigInteger> encryptedXORY = new ArrayList<BigInteger>();
+		
+		final BigInteger EncryptedOne = DGKOperations.encrypt(pubKey, (long)1);
+		//Step 2:
+		for (int i = 0; i < bigX.bitLength();i++)
+		{
+			if (bigXbits.charAt(i)=='0')
+			{
+				encryptedXORY.add(y.get(i));
+			}
+			else
+			{
+				encryptedXORY.add(DGKOperations.DGKSubtract(pubKey, EncryptedOne, y.get(i)));
+			}
+		}
+		/*
+		Step 3:
+		Choose a uniformly random-bit gammaA.  Let L
+		be the set {i| 0 <= i < l and x_i = gammaA}
+		 */
+		gammaA = new BigInteger(100,rnd).mod(new BigInteger("2")).intValue();
+		//L is the set of all bits that is equal to gammaA.
+		//Find all Indexes where x_i = gammaA
+		ArrayList <Integer> indexList = new ArrayList<Integer>(); 
+		for(int i = 0; i < bigX.bitLength(); i++)
+		{
+			if (bigXbits.charAt(i)==(char)gammaA)
+			{
+				indexList.add(i);
+			}
+		}
+		
+		//Step 4A: Compute C_i
+		ArrayList<BigInteger> c_i = new ArrayList<BigInteger>();
+			
+		for (int i = 0; i <= l-1;i++)
+		{
+			c_i.add(XORsummation(i+1,l,bigXbits,y,pubKey));
+		}
+		//Step 4B:
+		for (int i=0;i<c_i.size();i++)
+		{
+			if (gammaA==0)
+			{
+				c_i.set(i, DGKOperations.DGKSubtract
+						(pubKey, DGKOperations.DGKAdd(pubKey, EncryptedOne, c_i.get(i)), y.get(i)));
+			}
+			else
+			{
+				c_i.set(i, DGKOperations.DGKAdd(pubKey, y.get(i), c_i.get(i)));
+			}
+		}
+		
+		//Step 5: Blinding Phase
+		BigInteger temp;
+		for (int i=0;i<c_i.size();i++)
+		{
+			if(indexList.contains(i))
+			{
+				c_i.set(i, DGKOperations.DGKMultiply(pubKey, c_i.get(i), randomNumbernbits(2*160).longValue()));
+			}
+			else
+			{
+				c_i.set(i, DGKOperations.encrypt(pubKey, randomNumbernbits(2*160).longValue()));
+			}
+		}
+		//Step 6:
+		return c_i;
+	}
+	
+	private static BigInteger randomNumbernbits(int n)
+	{
+		BigInteger random;
+		do
+		{
+			random = new BigInteger(n, rnd);
+		}
+		while (random.bitLength() != n);
+		return random;
+	}
+	
+	private static BigInteger XORsummation(int lowerBound, int upperBound, String plainBits, ArrayList<BigInteger> encbits, DGKPublicKey pubKey)
+	{
+		BigInteger sum = DGKOperations.encrypt(pubKey, 0);
+		for(int i = lowerBound; i <= upperBound; i++)
+		{
+			
+		}
+		return sum;
+	}
+	public static int XOR (int x, int y)
+	{
+		if (x == 1 && y == 1 || x == 0 && y == 0)
+		{
+			return 0;
+		}
+		return 1;	
+	}
+	/*
+	These methods are to build DGK Keys.
+	This assumes the values were already pre-computed.
+	This is just to export the data to a less computationally advanced device e. g. 
+	an Android Phone.
+	 */
+	public static void readKeys (DGKPublicKey pk, DGKPrivateKey sk, String keyLocation)
+	{
+		Scanner read = null;
+/*
+NOTE THIS METHOD ASSUMES THE TEXT FILE HAS THIS STRUCTURE!!
+AND ASSUMES CASE SENSATIVE (SEE DGKOPERATIONS.GENERATEKEY METHOD
+Public Key
+N: BLAH
+G: BLAH
+H: BLAH
+U: BLAH
+Private Key
+p: BLAH
+q: BLAH
+vp: BLAH
+vq: BLAH
+U: BLAH
+ */
+		String reader;
+		String [] cut;
+		try
+		{
+			read= new Scanner(new File(keyLocation));
+			reader=read.nextLine();
+			if (reader.equals("Public Key"))
+			{
+				System.out.println("Term: Public Key was read...");
+				reader = read.nextLine();
+				//System.out.println(reader);
+				cut = reader.split(":");
+				System.out.println("Value of N: " + cut [1].trim());
+				pk.n = new BigInteger(cut[1].trim());
+				
+				reader = read.nextLine();
+				//System.out.println(reader);
+				cut = reader.split(":");
+				System.out.println("Value of G: " +cut [1].trim());
+				pk.g = new BigInteger(cut [1].trim());
+				
+				reader = read.nextLine();
+				//System.out.println(reader);
+				cut = reader.split(":");
+				System.out.println("Value of H: " +cut [1].trim());
+				pk.h = new BigInteger(cut [1].trim());
+				
+				reader = read.nextLine();
+				//System.out.println(reader);
+				cut = reader.split(":");
+				System.out.println("Value of U: " +cut [1].trim());
+				pk.u = Long.parseLong(cut [1].trim());
+				pk.bigU = BigInteger.valueOf(pk.u);
+			}
+			pk.l=l;
+			pk.t=t;
+			pk.k=k;
+			
+			reader = read.nextLine();
+			if (reader.equals("Private Key"))
+			{
+				System.out.println("Private Key being read...");
+				//Constructor to use: this (P, Q, VP, VQ, null, U);
+				reader = read.nextLine();
+				//System.out.println(reader);
+				cut = reader.split(":");
+				System.out.println("Value of P: " + cut [1].trim());
+				BigInteger P = new BigInteger(cut [1].trim());
+				
+				reader = read.nextLine();
+				//System.out.println(reader);
+				cut = reader.split(":");
+				System.out.println("Value of Q: " +cut [1].trim());
+				BigInteger Q = new BigInteger(cut [1].trim());
+				
+				reader = read.nextLine();
+				//System.out.println(reader);
+				cut = reader.split(":");
+				System.out.println("Value of VP: " +cut [1].trim());
+				BigInteger VP = new BigInteger(cut [1].trim());
+				
+				reader = read.nextLine();
+				//System.out.println(reader);
+				cut = reader.split(":");
+				System.out.println("Value of VQ: " +cut [1].trim());
+				BigInteger VQ = new BigInteger(cut [1].trim());
+				
+				reader = read.nextLine();
+				//System.out.println(reader);
+				cut = reader.split(":");
+				System.out.println("Value of U: " + cut [1].trim());
+				long U = Long.parseLong(cut [1].trim());
+				
+				sk.setP(P);
+				sk.setQ(Q);
+				sk.setVP(VP);
+				sk.setVQ(VQ);
+			    sk.setU(U);
+			}
+			else
+			{
+				System.out.println("Something went wrong with reading Keys...");
+			}
+			
+		}
+		catch(IOException ioe)
+		{
+			ioe.printStackTrace();
+		}
+		read.close();
+	}
+	public static void readLUT(DGKPrivateKey sk, String filelocation)
+	{
+		Scanner read = null;
+		String in;
+		String [] parts;
+		HashMap <BigInteger, Long> lookup = new HashMap<BigInteger, Long>();
+		try
+		{
+			read= new Scanner(new File(filelocation));
+			//LUT is <BigInteger, Long>
+			while (read.hasNext())
+			{
+				in = read.next();
+				//System.out.println(in);
+				parts = in.split(",");
+				System.out.println(parts[0] + " " + parts[1]);
+				lookup.put(new BigInteger(parts[0]), Long.parseLong(parts[1]));
+			}
+			sk.setLUT(lookup);
+		}
+		catch(IOException ioe)
+		{
+			ioe.printStackTrace();
+		}
+		read.close();
+	}
+	
+	public static void readgLUT(DGKPublicKey pk, String filelocation)
+	{
+		Scanner read = null;
+		String in;
+		String [] parts;
+		try
+		{
+			read= new Scanner(new File(filelocation));
+			//gLUT is <Long, BigInteger>
+			while (read.hasNext())
+			{
+				in = read.next();
+				//System.out.println(in);
+				parts = in.split(",");
+				//System.out.println(parts[0] + " " + parts[1]);
+				pk.gLUT.put(Long.parseLong(parts[0]), new BigInteger(parts[1]));
+			}
+		}
+		catch(IOException ioe)
+		{
+			ioe.printStackTrace();
+		}
+		read.close();
+	}
+	
+	public static void readhLUT(DGKPublicKey pk, String filelocation)
+	{
+		Scanner read = null;
+		String in;
+		String [] parts;
+		try
+		{
+			read= new Scanner(new File(filelocation));
+			while (read.hasNext())
+			{
+				//hLUT is <Long, BigInteger>
+				in = read.next();
+				parts = in.split(",");
+				pk.hLUT.put(Long.parseLong(parts[0]), new BigInteger(parts[1]));
+			}
+		}
+		catch(IOException ioe)
+		{
+			ioe.printStackTrace();
+		}
+		read.close();
+	}
+	
 	public static void main (String[] args)
 	{
-		int l=16, t=160, k=1024;
-	
-		DGKOperations FIU = new DGKOperations(l, t, k);
 		
-
+		//DGKOperations FIU = new DGKOperations(l, t, k);
+		
 		//Get keys
-		DGKPublicKey pubKey = FIU.getPublicKey();
-		DGKPrivateKey privKey = FIU.getPrivateKey();
+		//DGKPublicKey pubKey = FIU.getPublicKey();
+		//DGKPrivateKey privKey = FIU.getPrivateKey();
+		String KeyLocation= "C:\\Users\\Andrew\\Desktop\\DGKKeys.txt";
+		String LUTlocation = "C:\\Users\\Andrew\\Desktop\\LUT.txt";
+	    String hLUTlocation = "C:\\Users\\Andrew\\Desktop\\hLUT.txt";
+    	String gLUTlocation = "C:\\Users\\Andrew\\Desktop\\gLUT.txt";
+    	
+    	
+		DGKPublicKey pubKey = new DGKPublicKey();
+		DGKPrivateKey privKey = new DGKPrivateKey();
+		DGKOperations.readKeys(pubKey, privKey, KeyLocation);
+		
+		DGKOperations.readLUT(privKey, LUTlocation);
+		DGKOperations.readgLUT(pubKey, gLUTlocation);
+		DGKOperations.readhLUT(pubKey, hLUTlocation);
 	
+		//pubKey.printKeys();
+		//privKey.printKeys();
+		privKey.printLUT();
+		//pubKey.printgLUT();
+		//pubKey.printhLUT();
+		
 		long escape;
+		
+		
+		BigInteger test = DGKOperations.encrypt(pubKey, (long)70);
+		
+		BigInteger testSub = DGKOperations.DGKSubtract(pubKey, test, DGKOperations.encrypt(pubKey, 100));
+		System.out.println("70 - 100: "+ DGKOperations.decrypt(pubKey, privKey, testSub));
 		//Test 1: Encrypt/Decrypt good
 		for (int i=0;i<19;i++)
 		{
-			BigInteger test = DGKOperations.encrypt(pubKey, (long)i);
+			test = DGKOperations.encrypt(pubKey, (long)i);
 			escape = DGKOperations.decrypt(pubKey, privKey, test);
 			if (i==escape)
 			{
 				System.out.println("SUCESS AT ENCRYPT/DECRYPT: " + i);
 			}
-		}
-		
+			else
+			{
+				System.out.println("FAILURE AT ENCRYPT/DECRYPT: " + i);
+			}
+		}		
 		
 		BigInteger add = DGKOperations.encrypt(pubKey, (long)5);
 		for (int j=10000; j < 10005; j++)
@@ -1030,7 +1458,6 @@ long RandomBits_long(long l);
 			BigInteger partOne = DGKOperations.encrypt(pubKey, (long)j);
 			partOne = DGKOperations.DGKAdd(pubKey, partOne, add);
 			System.out.println(DGKOperations.decrypt(pubKey, privKey, partOne));
-			//Should see 5, 6, 7, 8, 9
 		}
 		
 		for (int j=500; j < 505; j++)
@@ -1038,7 +1465,28 @@ long RandomBits_long(long l);
 			BigInteger partOne = DGKOperations.encrypt(pubKey, (long)j);
 			partOne = DGKOperations.DGKMultiply(pubKey, partOne, (long)2);
 			System.out.println(DGKOperations.decrypt(pubKey, privKey, partOne));
-			//Should see 0, 2, 4, 6, 8
+			//Should see 500*2, 501*2, 502*2, 503*2, 504*2
 		}
+		
+//		ArrayList<BigInteger> compare = DGKOperations.Protocol3(90, test, pubKey);
+//		long de;
+//		int gammaB;
+//		for (int i=0;i<compare.size();i++)
+//		{
+//			de = DGKOperations.decrypt(pubKey, privKey, compare.get(i));
+//			if (de == 0)
+//			{
+//				gammaB=1;
+//			}
+//		}
+//		gammaB = 0;
+//		if (gammaA == gammaB)
+//		{
+//			System.out.println("XOR Result: 0, x > y");
+//		}
+//		else
+//		{
+//			System.out.println("XOR Result: 0, x <= y");
+//		}
 	}
 }//END OF CLASS

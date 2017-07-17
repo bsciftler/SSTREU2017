@@ -74,6 +74,13 @@ public class Paillier
         BigInteger ciphertext = ciphertext1.multiply(ciphertext2).mod(pk.modulous);
         return ciphertext;
     }
+    
+    public static BigInteger subtract(BigInteger ciphertext1, BigInteger ciphertext2, PublicKey pk)
+    {
+    	ciphertext2= Paillier.multiply(ciphertext2, -1, pk);
+    	BigInteger ciphertext = ciphertext1.multiply(ciphertext2).mod(pk.modulous);
+    	return ciphertext;
+    }
 
     // On input an encrypted value x and a scalar c, returns an encryption of
     // cx.
